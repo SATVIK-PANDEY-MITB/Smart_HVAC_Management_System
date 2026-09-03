@@ -1,19 +1,59 @@
 "use client";
-import React from "react";
+import React, { useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { HVACProvider } from "../context/HVACContext";
+import { AuthProvider, useAuth } from "../context/AuthContext";
 import {
   LayoutDashboard,
   Activity,
   Zap,
   ShieldAlert,
   Info,
-  Cpu
+  Cpu,
+  LogOut,
+  User as UserIcon
 } from "lucide-react";
 
-export default function ClientLayout({ children }: { children: React.ReactNode }) {
+function InnerLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, isAuthenticated, isLoading, logout } = useAuth();
+
+  const isLoginPage = pathname === "/login";
+
+  // Client-side route protection
+  useEffect(() => {
+    if (!isLoading) {
+      if (!isAuthenticated && !isLoginPage) {
+        router.replace("/login");
+      } else if (isAuthenticated && isLoginPage) {
+        router.replace("/dashboard");
+      }
+    }
+  }, [isAuthenticated, isLoading, isLoginPage, router]);
+
+  // Render Login page directly without sidebar/nav
+  if (isLoginPage) {
+    return <>{children}</>;
+  }
+
+  // Loading state during auth hydration
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#060b13] flex items-center justify-center text-slate-400">
+        <div className="flex items-center gap-3">
+          <div className="w-5 h-5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm font-medium">Checking authorization...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // If unauthenticated and not on login page, don't flash content while redirecting
+  if (!isAuthenticated) {
+    return null;
+  }
 
   const navItems = [
     { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
@@ -70,12 +110,37 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           </div>
 
           {/* Sidebar Footer */}
-          <div className="p-6 border-t border-slate-900/60">
-            <div className="bg-slate-900/40 border border-slate-800/60 rounded-xl p-3 text-center">
+          <div className="p-4 border-t border-slate-900/60 space-y-3">
+            {/* User Profile Card */}
+            {user && (
+              <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-3 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="p-1.5 bg-cyan-950/60 border border-cyan-500/30 rounded-lg shrink-0">
+                    <UserIcon className="w-4 h-4 text-cyan-400" />
+                  </div>
+                  <div className="truncate">
+                    <p className="text-xs font-bold text-slate-200 truncate">{user.name}</p>
+                    <span className="text-[10px] text-cyan-400/80 font-semibold tracking-wide uppercase block">
+                      {user.role}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={logout}
+                  title="Logout"
+                  className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer shrink-0"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {/* Node Status Badge */}
+            <div className="bg-slate-900/40 border border-slate-800/60 rounded-xl p-2.5 text-center">
               <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold block">
                 Node Status
               </span>
-              <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400 font-bold mt-1">
+              <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400 font-bold mt-0.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
                 ONLINE
               </span>
@@ -91,3 +156,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     </HVACProvider>
   );
 }
+
+export default function ClientLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <AuthProvider>
+      <InnerLayout>{children}</InnerLayout>
+    </AuthProvider>
+  );
+}
+
